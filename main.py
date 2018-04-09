@@ -35,7 +35,6 @@ def answer_call():
 
 @app.route("/", methods=['GET', 'POST'])
 def main():
-	print(session.get('request_number'))
 	body = request.values.get('Body', None)
 	request_number=session.get('request_number', 0)
 		
@@ -43,7 +42,6 @@ def main():
 		data = body.split(",")
 		data[1] = data[1][1:]
 		session['request_number'] = data[1]
-		print[session.get('request_number')]
 		return redirect(url_for('search', song_req=data[0]))
 	elif RepresentsInt(body):
 		sender = request.values.get('From', None)
@@ -56,7 +54,6 @@ def main():
 	
 @app.route("/search", methods=['POST'])
 def search():
-	print("search reached")
 	song_req = request.args['song_req']
 	#search for the songs
 	q = sanitize(song_req) #remove all spaces
@@ -76,7 +73,6 @@ def search():
 	for i in range(3):
 		title = data['items'][i]["snippet"]['title']
 		author = data['items'][i]["snippet"]['channelTitle']
-		print(title, author)
 		resp.message("{}. Song {} by {}".format(i, title, author))
 
 		videoId = data['items'][0]['id']['videoId']
@@ -88,20 +84,14 @@ def search():
 
 @app.route("/sms", methods=['GET', 'POST'])
 def answer_sms():
-	#body = request.values.get('Body', None)
-	#data = body.split(",")
-	#data[1] = data[1][1:]
-	
-	#request_number = data[1]
-	#song_req = data[0]
 	choice=request.args['choice']
 	choice=int(choice)
 	sender=request.args['sender']
-	song_req=session['songNames'][choice]
-	request_number=session['request_number']
-	chosen_id=session['songIds'][choice]
+	song_req=session.get('songNames')[choice]
+	request_number=session.get('request_number')
+	chosen_id=session.get('songIds')[choice]
 
-	reply = "Thanks for your message! The request to {} with the song {}".format(session['request_number'], song_req)
+	reply = "Thanks for your message! The request to {} with the song {}".format(request_number, song_req)
 
 	client = Client(account_sid, auth_token)
 
@@ -120,7 +110,7 @@ def send_music():
 	#extract data from API call
 	videoId = choice=request.args['chosen_id']
 	file_name = "{}.mp3".format(videoId)
-	request_number=session['request_number']
+	request_number=session.get('request_number')
 
 	global avail_songs
 	#check if song already available
