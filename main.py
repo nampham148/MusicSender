@@ -4,7 +4,7 @@ from twilio.twiml.voice_response import VoiceResponse
 from twilio.twiml.messaging_response import MessagingResponse
 from twilio.rest import Client
 from pytube import YouTube
-from helpers import sanitize, RepresentsInt, CorrectRequest
+from helpers import sanitize, RepresentsInt, CorrectRequest, db_add, search_not_have
 import urllib, json
 import os
 import ffmpy
@@ -22,7 +22,7 @@ avail_songs=[]
 
 
 
-@app.route("/answer", methods=['GET', 'POST'])
+@app.route("/answer", methods=['POST'])
 def answer_call():
     """Respond to incoming phone calls with a brief message."""
     # Start our TwiML response
@@ -33,23 +33,27 @@ def answer_call():
 
     return str(resp)
 
-@app.route("/", methods=['GET', 'POST'])
+@app.route("/", methods=['POST'])
 def main():
 	body = request.values.get('Body', None)
-	request_number=session.get('request_number', 0)
-		
+	state = session.get('state', 0)
+	
+	#if first request
 	if CorrectRequest(body):
+		session.clear()
 		data = body.split(",")
 		data[1] = data[1][1:]
 		session['request_number'] = data[1]
 		return redirect(url_for('search', song_req=data[0]))
-	elif RepresentsInt(body):
+	#if choosing song
+	elif RepresentsInt(body) and state == 1:
 		sender = request.values.get('From', None)
-		return redirect(url_for('answer_sms', choice=body, sender=sender))
+		return redirect(url_for('send_music', choice=body))
+	#invalid syntax
 	else:
 		session.clear()
 		resp = MessagingResponse()
-		resp.message("An error has occurred")
+		resp.message("An error has occurred! Please message [song info], [phone number]")
 		return str(resp)
 	
 @app.route("/search", methods=['POST'])
@@ -65,57 +69,36 @@ def search():
 	session['songIds'] = []
 	session['songNames'] = []
 
-	#construct the response
-	resp = MessagingResponse()
-	resp.message("We found three songs for you!")
+	reply = "We found three songs for you!\n"
 
 	#add to storing lists
 	for i in range(3):
 		title = data['items'][i]["snippet"]['title']
 		author = data['items'][i]["snippet"]['channelTitle']
-		resp.message("{}. Song {} by {}".format(i, title, author))
-
+		reply += "{}. Song {} by {}\n".format(i, title, author)
 		videoId = data['items'][0]['id']['videoId']
 		session['songIds'].append(videoId)
 		session['songNames'].append(title)
 
+	#construct the response
+	resp = MessagingResponse()
+	resp.message(reply)
 	session['state'] = 1
 	return str(resp)
-
-@app.route("/sms", methods=['GET', 'POST'])
-def answer_sms():
-	choice=request.args['choice']
-	choice=int(choice)
-	sender=request.args['sender']
-	song_req=session.get('songNames')[choice]
-	request_number=session.get('request_number')
-	chosen_id=session.get('songIds')[choice]
-
-	reply = "Thanks for your message! The request to {} with the song {}".format(request_number, song_req)
-
-	client = Client(account_sid, auth_token)
-
-	#start the reply message
-	client.api.account.messages.create(
-	    to=sender,
-	    from_=phone_number,
-	    body=reply)
-
-	return redirect(url_for('send_music', request_number=request_number, chosen_id=chosen_id), code=302)
 	
 
 @app.route("/send_music", methods=['POST'])
 def send_music():
- 	
 	#extract data from API call
-	videoId = choice=request.args['chosen_id']
-	file_name = "{}.mp3".format(videoId)
+ 	choice=request.args['choice']
+	choice=int(choice)
+	song_req=session.get('songNames')[choice]
+	videoId=session.get('songIds')[choice]
 	request_number=session.get('request_number')
-
-	global avail_songs
+	file_name = "{}.mp3".format(videoId)
+	
 	#check if song already available
-	if videoId not in avail_songs:
-		avail_songs.append(videoId)
+	if search_not_have(videoId):
 		ori_file_name = "{}.mp4".format(videoId)
 		
 
@@ -133,6 +116,8 @@ def send_music():
 		)
 		ff.run()
 
+		db_add(videoId)
+
 		#remove the original file
 		os.remove("Music/{}".format(ori_file_name))
 
@@ -147,7 +132,12 @@ def send_music():
 	)
 
 	session.clear()
-	return "success!"
+
+	#notify that call is made
+	reply = "Thanks for your message! The request to {} with the song {}".format(request_number, song_req)
+	resp = MessagingResponse()
+	resp.message(reply)
+	return str(resp)
 
 @app.route('/Music/<path:path>', methods=['GET', 'POST'])
 def retrieve_music(path):
