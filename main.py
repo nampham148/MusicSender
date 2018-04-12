@@ -1,5 +1,5 @@
 from __future__ import unicode_literals
-from flask import Flask, request, redirect, url_for, send_from_directory, session
+from flask import Flask, request, redirect, url_for, send_from_directory, session, render_template
 from twilio.twiml.voice_response import VoiceResponse
 from twilio.twiml.messaging_response import MessagingResponse
 from twilio.rest import Client
@@ -20,7 +20,9 @@ home_url = os.environ['home_url']
 API_KEY = os.environ['API_KEY']
 avail_songs=[]
 
-
+@app.route("/health", methods=['GET', 'POST'])
+def health():
+	return render_template('index.html')
 
 @app.route("/answer", methods=['POST'])
 def answer_call():
@@ -152,7 +154,6 @@ def construct_response(path):
     response = VoiceResponse()
     response.say("This is a music gift just for you!", voice='man')
     response.play(url)
-    print(response)
     return str(response)
 
 
