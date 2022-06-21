@@ -27,7 +27,7 @@ lockfile==0.12.2
 MarkupSafe==1.0
 moviepy==0.2.3.2
 ndg-httpsclient==0.4.0
-numpy==1.14.2
+numpy==1.22.0
 pathspec==0.5.5
 Pillow==5.1.0
 pyasn1==0.1.9
